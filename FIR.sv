@@ -1,10 +1,11 @@
 
 
-module FIR #(parameter int Width = 16, parameter int Taps = 31 ) // 
+
+module FIR #(parameter int Width = 16, parameter int Taps = 31, parameter int out_Width = (2*Width)+ $clog2(Taps)+2) // 
  (
 input logic signed [Width-1:0] inp_sig, //16 bits (Q8.8)
 
-output logic signed [(2*Width)+ $clog2(Taps)+1:0]  out_sig, // 37 bits +sign bit
+output logic signed [out_Width-1:0]  out_sig, // 38 bits +sign bit
 
 input logic CLK, n_RST
 
@@ -14,8 +15,8 @@ input logic CLK, n_RST
 
 
 logic signed [Width-1:0] D_wire [Taps-2:0]; //16bits each, 30 elements (Taps-1), 
-logic signed [(2*Width)+$clog2(Taps)+1:0] out_sig_reg;
-
+logic signed [out_Width-1:0] out_sig_reg;
+logic signed [out_Width-1:0] comb_accum;
 
 // Q1.15 coefficients supplied for the 31-tap filter.
 parameter logic signed [Width-1:0] Coeff [0:Taps-1] = '{ //[0:Taps-1] to start with the first element of the array at index 0
@@ -28,6 +29,19 @@ parameter logic signed [Width-1:0] Coeff [0:Taps-1] = '{ //[0:Taps-1] to start w
    -16'sd416,   16'sd323,  -16'sd192,    16'sd81,
    -16'sd11,    -16'sd23,    16'sd41
 };
+
+
+
+always_comb begin 
+    comb_accum = inp_sig * Coeff[0];
+    for (int i = 1; i < Taps; i++) begin
+        comb_accum = comb_accum + D_wire[i-1] * Coeff[i];
+    end
+end
+        
+
+
+
 
 always @(posedge CLK or negedge n_RST) begin
     if (!n_RST) begin
@@ -42,15 +56,9 @@ always @(posedge CLK or negedge n_RST) begin
         D_wire[i] <= D_wire[i-1];
     end
 
-    out_sig_reg <= inp_sig * Coeff[0];
-    for (int i = 1; i < Taps; i++) begin
-        out_sig_reg <= out_sig_reg + D_wire[i-1] * Coeff[i];
+    out_sig_reg <= comb_accum;
     end
 
-
-
-
-    
 end
 
 
