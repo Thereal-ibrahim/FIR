@@ -1,5 +1,4 @@
-
-
+timescale 1ns/1ps
 
 module FIR #(parameter int Width = 16, parameter int Taps = 31, parameter int out_Width = (2*Width)+ $clog2(Taps)+2) // 
  (
@@ -31,7 +30,7 @@ parameter logic signed [Width-1:0] Coeff [0:Taps-1] = '{ //[0:Taps-1] to start w
 };
 
 
-
+//combinatorial logic to calculate FIR output. 
 always_comb begin 
     comb_accum = inp_sig * Coeff[0];
     for (int i = 1; i < Taps; i++) begin
@@ -40,15 +39,13 @@ always_comb begin
 end
         
 
-
-
-
 always @(posedge CLK or negedge n_RST) begin
     if (!n_RST) begin
         for (int i=0; i<= Taps-2; i++) begin
             D_wire[i] <= 0;
         end
         out_sig_reg <= 0;
+        comb_accum <= 0;
     end
     else begin
     D_wire[0] <= inp_sig;
