@@ -2,9 +2,9 @@ timescale 1ns/1ps
 
 module FIR #(parameter int Width = 16, parameter int Taps = 31, parameter int out_Width = (2*Width)+ $clog2(Taps)+2) // 
  (
-input logic signed [Width-1:0] inp_sig, //16 bits (Q8.8)
+input logic signed [Width-1:0] inp_sig, //16 bits (Q1.15)
 
-output logic signed [out_Width-1:0]  out_sig, // 38 bits +sign bit
+output logic signed [out_Width-1:0]  out_sig, // 38 bits +sign bit  
 
 input logic CLK, n_RST
 
@@ -13,9 +13,10 @@ input logic CLK, n_RST
 
 
 
-logic signed [Width-1:0] D_wire [Taps-2:0]; //16bits each, 30 elements (Taps-1), 
+logic signed [Width-1:0] D_wire [Taps-2:0]; // Registers for the Delay line, 30 elements (Taps-1), 16bits each.
 logic signed [out_Width-1:0] out_sig_reg;
 logic signed [out_Width-1:0] comb_accum;
+
 
 // Q1.15 coefficients supplied for the 31-tap filter.
 parameter logic signed [Width-1:0] Coeff [0:Taps-1] = '{ //[0:Taps-1] to start with the first element of the array at index 0
