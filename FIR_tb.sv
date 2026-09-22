@@ -75,9 +75,9 @@ initial begin
             @(posedge CLK);
             inp_sig = sample[15:0];
            
-            #11; // Allow nonblocking assignments in the DUT to complete
+            #1; // Allow nonblocking assignments in the DUT to complete
             $fdisplay(out_fd, "%0d", $signed(out_sig));
-
+            
         end 
         else begin
             $display("Error: Failed to read input from file at sample %0d", i);
