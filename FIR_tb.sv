@@ -1,4 +1,4 @@
-timescale 1ns/1ps
+`timescale 1ns/1ps
 
 
 module FIR_tb;
@@ -8,7 +8,7 @@ module FIR_tb;
 //input logic CLK, n_RST
 
  logic signed [15:0] inp_sig; //16 bits (Q1.15)
- logic signed [37:0] out_sig; //38 bits (Q1.37)
+ logic signed [38:0] out_sig; //39 bits
  logic CLK, n_RST;
 
 FIR dut (
@@ -16,7 +16,7 @@ FIR dut (
     .out_sig(out_sig),
     .CLK(CLK),
     .n_RST(n_RST)
-)
+);
 
 
 
@@ -32,7 +32,7 @@ initial begin
 
 
 //rst task
-task rst();
+task automatic rst();
 begin
     n_RST = 0;
     #30;
@@ -42,7 +42,12 @@ endtask
 
 
 
-integer fd, status;
+integer fd, out_fd, status;
+
+integer sample;
+
+
+
 
 initial begin 
     inp_sig = 0;
@@ -54,13 +59,25 @@ initial begin
         $finish;
     end // if file cannot be opened, display an error message and terminate the simulation
 
+    out_fd = $fopen("output.txt", "w");
+    if (out_fd == 0) begin
+        $display("Error: Can't create output.txt");
+        $fclose(fd);
+        $finish;
+    end
+
 
     #100;
 
-    for (int i = 0; i<1000; i++) begin
-        status = $fscanf(fd, "%d\n", inp_sig); // Read a signed decimal number from the file and store it in inp_sig
+    for (int i = 0; i<58400; i++) begin
+        status = $fscanf(fd, "%d\n", sample); // Read a signed decimal number from the file and store it in sample
         if (status == 1) begin
-            inp_sig = sample[15:0]; 
+            @(posedge CLK);
+            inp_sig = sample[15:0];
+           
+            #1; // Allow nonblocking assignments in the DUT to complete
+            $fdisplay(out_fd, "%0d", $signed(out_sig));
+
         end 
         else begin
             $display("Error: Failed to read input from file at sample %0d", i);
@@ -69,6 +86,7 @@ initial begin
     end
 
     $fclose(fd); // Close the input file
+    $fclose(out_fd); // Close the output file
     $stop; // Stop the simulation after reading all samples
 end
 

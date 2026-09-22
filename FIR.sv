@@ -1,10 +1,10 @@
-timescale 1ns/1ps
+`timescale 1ns/1ps
 
-module FIR #(parameter int Width = 16, parameter int Taps = 31, parameter int out_Width = (2*Width)+ $clog2(Taps)+2) // 
+module FIR #(parameter int Width = 16, parameter int Taps = 31, parameter int out_Width = (2*Width)+ $clog2(Taps)) // 
  (
 input logic signed [Width-1:0] inp_sig, //16 bits (Q1.15)
 
-output logic signed [out_Width-1:0]  out_sig, // 38 bits +sign bit  
+output logic signed [out_Width-1:0]  out_sig, // 36 bits +sign bit  
 
 input logic CLK, n_RST
 
@@ -46,7 +46,6 @@ always @(posedge CLK or negedge n_RST) begin
             D_wire[i] <= 0;
         end
         out_sig_reg <= 0;
-        comb_accum <= 0;
     end
     else begin
     D_wire[0] <= inp_sig;
