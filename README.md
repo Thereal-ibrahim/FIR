@@ -1,107 +1,127 @@
-# 16-Tap FIR Filter in SystemVerilog
+# 31-Tap FIR Filter in SystemVerilog
 
-This project is intended to implement a finite impulse response (FIR) digital
-filter with 16 taps. The filter accepts 16-bit input samples and uses one
-16-bit coefficient for each tap. Fixed-point values are supported so that the
-design can be synthesized for FPGA or ASIC hardware without floating-point
-arithmetic.
-
-## Project Status
-
-The repository currently contains the initial SystemVerilog module template
-and an empty testbench. The RTL interface, arithmetic width, clocking behavior,
-and verification environment still need to be implemented.
+This project implements a signed, fixed-point finite impulse response (FIR)
+filter for audio sample processing. The RTL uses a 31-tap symmetric coefficient
+set, a 16-bit input sample, and a registered wide output. A Python reference
+model is included to reproduce the RTL calculation and compare simulation
+results.
 
 ## Intended Filter Operation
 
-For an input sample sequence `x[n]` and coefficients `h[0]` through `h[15]`,
+For an input sample sequence `x[n]` and coefficients `h[0]` through `h[30]`,
 the output is:
 
 ```text
-y[n] = h[0]x[n] + h[1]x[n-1] + ... + h[15]x[n-15]
+y[n] = h[0]x[n] + h[1]x[n-1] + ... + h[30]x[n-30]
 ```
 
-The implementation will maintain a delay line containing the most recent 16
-input samples. On each accepted sample, the filter will multiply every sample
-in the delay line by its corresponding coefficient and accumulate the 16
-products.
+The implementation maintains a 30-entry delay line. The current input is
+multiplied by `Coeff[0]`, while the delayed samples are multiplied by the
+remaining coefficients and summed in combinational logic. The sum is captured
+in `out_sig_reg` on the rising clock edge.
 
 ## Data and Fixed-Point Format
 
-- Input sample: 16-bit signed fixed-point value
-- Coefficient: 16-bit signed fixed-point value for each of 16 taps
-- Number of taps: 16
-- Product width: 32 bits before accumulation
-- Accumulator: wider than 32 bits to reduce overflow risk during summation
-- Output: 16-bit signed fixed-point value after scaling and saturation or
-	truncation, depending on the selected implementation
+- Input sample (`inp_sig`): 16-bit signed Q1.15 value
+- Coefficients (`Coeff`): 31 signed 16-bit Q1.15 values stored as a module
+	parameter
+- Product: 32-bit signed multiplication result with 30 fractional bits
+- Output (`out_sig`): signed width `2*Width + $clog2(Taps)`; the default is
+	37 bits (`[36:0]`)
+- Scaling: no right shift, rounding, or saturation is applied in the RTL, so
+	the output remains in the accumulated Q?.30 format
 
-The binary-point location must be defined consistently for both samples and
-coefficients. For example, with Q1.15 inputs and coefficients:
+For Q1.15 inputs and coefficients:
 
 ```text
 Q1.15 x Q1.15 = Q2.30
 ```
 
-The accumulated result must then be shifted right by 15 bits to return to a
-Q1.15 output. Any narrowing operation should specify whether it truncates,
-rounds, or saturates.
+The accumulator width provides additional headroom for summing the 31
+products. `backtoWav.py` interprets the output as having 30 fractional bits,
+normalizes it, and converts it to 16-bit PCM audio.
 
-## Planned Hardware Interface
+## RTL Interface
 
-The final module interface should define, at minimum:
+The module is declared as:
 
-- `clk`: rising-edge clock
-- `rst`: reset input for clearing the delay line and output state
-- `valid_in`: indicates that `sample_in` is valid
-- `sample_in`: signed 16-bit input sample
-- `coefficients`: 16 signed 16-bit tap coefficients, or an equivalent
-	coefficient-load interface
-- `valid_out`: indicates that `sample_out` is valid
-- `sample_out`: signed 16-bit filtered output
+```systemverilog
+module FIR #(
+		parameter int Width = 16,
+		parameter int Taps = 31,
+		parameter int out_Width = (2*Width) + $clog2(Taps),
+		parameter logic signed [Width-1:0] Coeff [0:Taps-1] = ...
+) (
+		input  logic signed [Width-1:0] inp_sig,
+		output logic signed [out_Width-1:0] out_sig,
+		input  logic CLK,
+		input logic n_RST
+);
+```
 
-The exact signal names and whether coefficients are parameters, ports, or
-runtime-programmable registers will be decided when the RTL is completed.
+`n_RST` is an active-low asynchronous reset. It clears the delay line and
+registered output. There is no `valid_in` or `valid_out` signal; each rising
+clock edge processes the current value of `inp_sig`, and the corresponding
+result is registered at that edge.
 
-## Expected Processing Behavior
+## Processing Behavior
 
-1. Reset clears all 16 delay-line entries and the output state.
-2. When `valid_in` is asserted, the new sample enters the delay line.
-3. The 16 delayed samples are multiplied by the 16 coefficients.
-4. The products are accumulated using signed arithmetic.
-5. The accumulator is scaled back to the output fixed-point format.
-6. The result is presented on `sample_out` with `valid_out` asserted.
+1. Assert `n_RST = 0` to clear all 30 delay-line entries and the output.
+2. Deassert reset before applying samples.
+3. On each rising edge of `CLK`, calculate and register the FIR sum.
+4. Shift the current input into the delay line for use by later samples.
 
-The latency will depend on whether the multiplier-accumulator is implemented as
-a single combinational sum, a pipelined adder tree, or a sequential MAC unit.
+The arithmetic is combinational before the output register, so the output
+register adds one clocked stage. The testbench samples `out_sig` one nanosecond
+after each driven clock edge.
 
 ## Files
 
 | File | Description |
 | --- | --- |
-| `FIR.sv` | FIR filter RTL; currently a module template |
-| `FIR_tb.sv` | Simulation testbench; currently empty |
-| `README.md` | Project description and fixed-point design notes |
+| `FIR.sv` | Parameterized 31-tap FIR RTL and default coefficient set |
+| `FIR_tb.sv` | Testbench with clock, reset, file input, and output logging |
+| `golden_model.py` | Python reference model and coefficient parser |
+| `compare_outputs.py` | Compares RTL and Python output files |
+| `backtoWav.py` | Converts fixed-point filter output to normalized WAV audio |
+| `Sound_Wave_Extraction.Py` | Resamples WAV input to 8 kHz Q1.15 samples |
+| `run.do` | Questa/ModelSim compilation and simulation script |
+| `wave.do` | Questa/ModelSim waveform configuration |
+| `input.txt` | Signed decimal input samples consumed by the testbench |
+| `output.txt` | RTL simulation output, one signed decimal value per line |
+| `ouput_python.txt` | Python reference output; filename is retained for compatibility |
+| `output_comparison.txt` | Mismatch report generated by `compare_outputs.py` |
 
 ## Verification Plan
 
-The testbench should verify:
+The current testbench reads up to 58,400 signed decimal samples from
+`input.txt`, writes the simulated results to `output.txt`, and stops when the
+input stream is exhausted. The Python model uses the same delay-line update
+order and extracts the coefficients directly from `FIR.sv`.
 
-- Reset behavior and delay-line initialization
-- Impulse response, which should reproduce the coefficient sequence
-- Constant and ramp input sequences
-- Positive and negative signed samples and coefficients
-- Fixed-point scaling and output width conversion
-- Overflow, rounding, and saturation behavior
-- Input/output valid timing and filter latency
-
-A useful reference model is the same convolution equation evaluated with a
-wide signed integer accumulator. Simulation should compare the RTL output
-against this model for each valid input sample.
+`compare_outputs.py` compares the first 58,400 values from `output.txt` and
+`ouput_python.txt`. An empty `output_comparison.txt` means no mismatches were
+found for the compared values.
 
 ## Simulation
 
-No simulator command is configured yet. Once the RTL and testbench are
-implemented, run them with a SystemVerilog simulator such as Questa,
-Vivado XSim, Verilator, or Icarus Verilog, and add the project-specific
-compile and run commands here.
+The checked-in flow targets Questa/ModelSim:
+
+```text
+vsim -c -do run.do
+```
+
+The script creates the `work` library, compiles `FIR.sv` and `FIR_tb.sv`,
+loads `wave.do`, runs the simulation, and exits. Generate and compare the
+Python reference output with:
+
+```text
+python golden_model.py
+python compare_outputs.py
+```
+
+The audio helper requires NumPy and SciPy:
+
+```text
+python backtoWav.py
+```
