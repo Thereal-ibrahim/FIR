@@ -1,8 +1,0 @@
-C:/Users/DELL/Desktop/FIR/FIR.sv {1 {vlog -work work -sv C:/Users/DELL/Desktop/FIR/FIR.sv
-Model Technology ModelSim ALTERA vlog 10.1d Compiler 2012.11 Nov  2 2012
--- Compiling module FIR
-
-Top level modules:
-	FIR
-
-} {} {}}
